@@ -148,7 +148,7 @@ class RescalingIntQuant(brevitas.jit.ScriptModule):
 
     @brevitas.jit.script_method
     def forward(self, x: Tensor) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
-        bit_width = self.msb_clamp_bit_width_impl()
+        bit_width = self.msb_clamp_bit_width_impl() 
         threshold = self.scaling_impl(x)
         int_threshold = self.int_scaling_impl(bit_width)
         scale = threshold / int_threshold

@@ -250,8 +250,8 @@ class QuantRecurrentLayerMixin(ExportMixin):
             acc_bit_width = None  # TODO
         if quant_input.scale is not None and quant_weight_ih.scale is not None:
             acc_scale_shape = compute_channel_view_shape(quant_input.value, channel_dim=1)
-            acc_scale = quant_weight_ih.scale.view(acc_scale_shape)
-            acc_scale = acc_scale * quant_input.scale.view(acc_scale_shape)
+            acc_scale = quant_weight_ih.scale.view(acc_scale_shape)   # the scale of weight
+            acc_scale = acc_scale * quant_input.scale.view(acc_scale_shape)  # the scale of input * the scale of weight
         quant_bias = gate.bias_quant(gate.bias, acc_scale, acc_bit_width)
         return quant_weight_ih, quant_weight_hh, quant_bias
 
@@ -265,8 +265,8 @@ class QuantRecurrentLayerMixin(ExportMixin):
         if isinstance(inp, PackedSequence):
             raise RuntimeError("PackedSequence input currently not supported.")
         quant_input = inp
-        if not self.quantize_output_only:
-            quant_input = self.io_quant(quant_input)
+        if not self.quantize_output_only:  # for the first layer this is True
+            quant_input = self.io_quant(quant_input)  # 
         elif not isinstance(inp, QuantTensor):
             quant_input = QuantTensor(quant_input)
         return quant_input

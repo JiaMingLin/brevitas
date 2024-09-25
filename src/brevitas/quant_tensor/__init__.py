@@ -112,6 +112,8 @@ class QuantTensor(QuantTensorBase):
             value = self.value.type(torch.float32)
             scale = self.scale.type(torch.float32)
             zero_point = self.zero_point.type(torch.float32)
+        
+        # q = r/s + z
         int_value = value / scale
         int_value = int_value + zero_point
         return int_value

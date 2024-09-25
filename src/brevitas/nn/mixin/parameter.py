@@ -130,7 +130,7 @@ class QuantWeightMixin(QuantProxyMixin):
             self.weight_quant.init_tensor_quant()
             self.weight_quant.to(self.weight.device)
 
-
+## quantization of bias
 class QuantBiasMixin(QuantProxyMixin):
     __metaclass__ = ABCMeta
 
