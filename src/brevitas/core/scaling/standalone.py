@@ -45,7 +45,7 @@ class ConstScaling(brevitas.jit.ScriptModule):
         >>> scaling_impl = ConstScaling(1.0, scaling_min_val=3.0)
         >>> scaling_impl(torch.empty(1))
         tensor(3.)
-        >>> scaling_impl = ConstScaling(3.0, restrict_scaling_impl=PowerOfTwoRestrictValue())
+        >>> scaling_impl = ConstScaling(3.0, restrict_scaling_impl=PowerOfTwoRestrictValue())  return torch.log2(x)
         >>> scaling_impl(torch.empty(1))
         tensor(4.)
 

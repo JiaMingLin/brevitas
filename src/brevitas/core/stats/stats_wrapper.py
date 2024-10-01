@@ -90,13 +90,13 @@ class _ParameterListStats(brevitas.jit.ScriptModule):
             self,
             stats_impl: nn.Module,
             stats_output_shape: Tuple[int, ...],
-            stats_input_view_shape_impl: nn.Module,
+            stats_input_view_shape_impl: nn.Module,    # OverTensorView: to flattening input tensor
             stats_input_concat_dim: int,
             tracked_parameter_list: List[torch.nn.Parameter]) -> None:
         super(_ParameterListStats, self).__init__()
 
-        self.stats_input_concat_dim = stats_input_concat_dim
-        self.first_tracked_param = _ViewParameterWrapper(
+        self.stats_input_concat_dim = stats_input_concat_dim  # ??
+        self.first_tracked_param = _ViewParameterWrapper(     # Flattening the input tensor
             tracked_parameter_list[0], stats_input_view_shape_impl)
         if len(tracked_parameter_list) > 1:
             extra_list = [

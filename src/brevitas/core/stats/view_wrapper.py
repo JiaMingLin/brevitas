@@ -16,7 +16,7 @@ class _ViewParameterWrapper(brevitas.jit.ScriptModule):
     def __init__(self, parameter: Parameter, view_shape_impl: Module) -> None:
         super(_ViewParameterWrapper, self).__init__()
         self.parameter = parameter
-        self.view_shape_impl = view_shape_impl
+        self.view_shape_impl = view_shape_impl  # OverTensorView: flattening 
 
     @brevitas.jit.script_method
     def forward(self) -> Tensor:

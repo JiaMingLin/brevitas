@@ -32,7 +32,7 @@ class PermuteDims(brevitas.jit.ScriptModule):
 class OverTensorView(brevitas.jit.ScriptModule):
     """
     ScriptMoodule to compute the :func:`~brevitas.function.shape.over_tensor` view of an input tensor.
-
+    flatening all dimensions except the first.
     Examples:
         >>> view_module = OverTensorView()
         >>> y = view_module(torch.empty(size=[16, 6, 5, 5]))

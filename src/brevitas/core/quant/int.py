@@ -140,11 +140,11 @@ class RescalingIntQuant(brevitas.jit.ScriptModule):
             zero_point_impl: Module,
             bit_width_impl: Module):
         super(RescalingIntQuant, self).__init__()
-        self.int_quant = int_quant
-        self.scaling_impl = scaling_impl
-        self.int_scaling_impl = int_scaling_impl
-        self.zero_point_impl = zero_point_impl
-        self.msb_clamp_bit_width_impl = bit_width_impl
+        self.int_quant = int_quant                  # IntQuant
+        self.scaling_impl = scaling_impl            # StatsFromParameterScaling
+        self.int_scaling_impl = int_scaling_impl    # IntScaling
+        self.zero_point_impl = zero_point_impl      # ZeroZeroPoint
+        self.msb_clamp_bit_width_impl = bit_width_impl # BitWidthConst
 
     @brevitas.jit.script_method
     def forward(self, x: Tensor) -> Tuple[Tensor, Tensor, Tensor, Tensor]:

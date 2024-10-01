@@ -23,11 +23,11 @@ class StatsFromParameterScaling(brevitas.jit.ScriptModule):
 
     def __init__(
             self,
-            scaling_stats_impl: Module,
-            scaling_stats_input_view_shape_impl: Module,
-            scaling_stats_input_concat_dim: int,
+            scaling_stats_impl: Module,                        # AbsMax()
+            scaling_stats_input_view_shape_impl: Module,       # OverTensorView()
+            scaling_stats_input_concat_dim: int,               # None
             tracked_parameter_list: List[torch.nn.Parameter],
-            restrict_scaling_impl: Module,
+            restrict_scaling_impl: Module,                     # FloatRestrictValue()
             scaling_shape: Tuple[int, ...],
             affine_rescaling: bool = False,
             affine_shift_scale: bool = False,
@@ -35,6 +35,12 @@ class StatsFromParameterScaling(brevitas.jit.ScriptModule):
             dtype: Optional[torch.dtype] = None,
             device: Optional[torch.device] = None) -> None:
         super(StatsFromParameterScaling, self).__init__()
+        self.scaling_stats_impl = scaling_stats_impl
+        self.scaling_stats_input_view_shape_impl = scaling_stats_input_view_shape_impl
+        self.scaling_stats_input_concat_dim = scaling_stats_input_concat_dim
+        self.tracked_parameter_list = tracked_parameter_list
+        self.restrict_scaling_impl = restrict_scaling_impl
+        self.scaling_shape = scaling_shape
         self.parameter_list_stats = _ParameterListStats(
             scaling_stats_impl,
             scaling_shape,

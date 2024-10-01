@@ -577,7 +577,7 @@ class _QuantLSTMLayer(QuantRecurrentLayerMixin, nn.Module):
                 sigmoid_quant, act_kwargs_prefix='sigmoid_', **kwargs)
 
         cell = _QuantLSTMCell(
-            input_quant
+            input_quant,
             output_quant=output_quant.act_quant_f,
             cell_state_quant=cell_state_quant.act_quant,
             input_acc_quant=input_acc_quant.act_quant,
