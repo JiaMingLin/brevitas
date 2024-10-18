@@ -200,6 +200,7 @@ class _QuantLSTMCell(nn.Module):
             cell_tanh_quant,
             output_sigmoid_quant,
             hidden_state_tanh_quant,
+            hidden_state_output_quant,
             reverse_input: bool,
             batch_first: bool,
             cifg: bool,
@@ -218,6 +219,7 @@ class _QuantLSTMCell(nn.Module):
         self.cell_tanh_quant = cell_tanh_quant
         self.output_sigmoid_quant = output_sigmoid_quant
         self.hidden_state_tanh_quant = hidden_state_tanh_quant
+        self.hidden_state_output_quant = hidden_state_output_quant
         self.reverse_input = reverse_input
         self.batch_first = batch_first
         self.cifg = cifg
@@ -274,6 +276,7 @@ class _QuantLSTMCell(nn.Module):
 
         quant_hidden_state_tanh = self.hidden_state_tanh_quant(quant_cell_state_tuple[0])[0]
         quant_hidden_state = quant_out_gate * quant_hidden_state_tanh
+
         quant_hidden_state_tuple = self.output_quant(quant_hidden_state)
         return quant_hidden_state_tuple, quant_cell_state_tuple
 
@@ -520,13 +523,16 @@ class _QuantLSTMLayer(QuantRecurrentLayerMixin, nn.Module):
             batch_first: bool,
             weight_quant,
             bias_quant,
+            #io_quant,
             input_quant,
             output_quant,
             gate_acc_quant,
             sigmoid_quant,
             tanh_quant,
             cell_state_quant,
+            hidden_state_output_quant,
             reverse_input: bool,
+            quantize_input_only: bool,
             quantize_output_only: bool,
             cifg: bool,
             shared_input_hidden_weights: bool,
@@ -542,8 +548,13 @@ class _QuantLSTMLayer(QuantRecurrentLayerMixin, nn.Module):
             input_output_weight: GateWeight = None,
             **kwargs):
         nn.Module.__init__(self)
+        ## input and output share same quantizer
+        # io_quant = QuantIdentity(io_quant, act_kwargs_prefix='io_', **kwargs)
         input_quant = QuantIdentity(input_quant, act_kwargs_prefix='input_', **kwargs)
-        output_quant = QuantIdentity(input_quant, act_kwargs_prefix='output_', **kwargs)
+        output_quant = QuantIdentity(output_quant, act_kwargs_prefix='output_', **kwargs)
+        hidden_state_output_quant = QuantIdentity(
+            hidden_state_output_quant, act_kwargs_prefix='hidden_state_output_', **kwargs)
+        
         cell_state_quant = QuantIdentity(
             cell_state_quant, act_kwargs_prefix='cell_state_', **kwargs)
 
@@ -577,8 +588,8 @@ class _QuantLSTMLayer(QuantRecurrentLayerMixin, nn.Module):
                 sigmoid_quant, act_kwargs_prefix='sigmoid_', **kwargs)
 
         cell = _QuantLSTMCell(
-            input_quant,
-            output_quant=output_quant.act_quant_f,
+            # output_quant=io_quant.act_quant,
+            output_quant=output_quant.act_quant,
             cell_state_quant=cell_state_quant.act_quant,
             input_acc_quant=input_acc_quant.act_quant,
             forget_acc_quant=forget_acc_quant.act_quant,
@@ -589,19 +600,26 @@ class _QuantLSTMLayer(QuantRecurrentLayerMixin, nn.Module):
             cell_tanh_quant=cell_tanh_quant.act_quant,
             output_sigmoid_quant=output_sigmoid_quant.act_quant,
             hidden_state_tanh_quant=hidden_state_tanh_quant.act_quant,
+            hidden_state_output_quant=hidden_state_output_quant.act_quant,
             reverse_input=reverse_input,
             batch_first=batch_first,
             cifg=cifg,
-            output_quant_enabled=io_quant.act_quant.is_quant_enabled,
+            output_quant_enabled=output_quant.act_quant.is_quant_enabled,
             cell_state_quant_enabled=cell_state_quant.act_quant.is_quant_enabled,
             fast_impl=False)
+        
+        ## The wrapper for the _QuantLSTMCell to the layer level
         QuantRecurrentLayerMixin.__init__(
             self,
             cell=cell,
-            io_quant=io_quant.act_quant,
+            # io_quant=io_quant.act_quant,
+            input_quant=input_quant.act_quant,
+            output_quant=output_quant.act_quant,
+            hidden_state_output_quant=hidden_state_output_quant.act_quant,
             input_size=input_size,
             hidden_size=hidden_size,
             reverse_input=reverse_input,
+            quantize_input_only=quantize_input_only,
             quantize_output_only=quantize_output_only,
             shared_input_hidden_weights=shared_input_hidden_weights,
             return_quant_tensor=return_quant_tensor)
@@ -671,7 +689,7 @@ class _QuantLSTMLayer(QuantRecurrentLayerMixin, nn.Module):
 
     @property
     def quantizers_to_share(self):
-        shared_quantizers = {'io_quant': self.io_quant}
+        shared_quantizers = {'input_quant': self.input_quant}
         if self.shared_cell_state_quant:
             shared_quantizers['cell_state_quant'] = self.cell.cell_state_quant
         return shared_quantizers
@@ -697,6 +715,7 @@ class _QuantLSTMLayer(QuantRecurrentLayerMixin, nn.Module):
                 cell_tanh_quant=self._wrap_act_proxy('cell_tanh_quant'),
                 output_sigmoid_quant=self._wrap_act_proxy('output_sigmoid_quant'),
                 hidden_state_tanh_quant=self._wrap_act_proxy('hidden_state_tanh_quant'),
+                hidden_state_output_quant=self._wrap_act_proxy('hidden_state_output_quant'),
                 reverse_input=self.cell.reverse_input,
                 batch_first=self.cell.batch_first,
                 cifg=self.cell.cifg,
@@ -746,10 +765,12 @@ class _QuantLSTMLayer(QuantRecurrentLayerMixin, nn.Module):
             quant_bias_output = quant_bias_output.value
         # Handle None bias by setting it 0. end
         
-        ## Before recurrent computation, 
-        ##     quantize the input hidden state by the output quantizer
+        ## Quant the hidden state by the hidden quantizer
+        ## if the first input(hidden is None), then initialize the hidden state as zero
+        ## else, quantize the hidden state by the hidden quantizer
         quant_hidden_state = self.maybe_quantize_state(
-            quant_input.value, hidden_state, self.cell.output_quant)
+            quant_input.value, hidden_state, self.cell.hidden_state_output_quant)
+        
         ##     quantize the memory cell state by the memory cell quantizer
         quant_cell_state = self.maybe_quantize_state(
             quant_input.value, cell_state, self.cell.cell_state_quant)
@@ -761,6 +782,7 @@ class _QuantLSTMLayer(QuantRecurrentLayerMixin, nn.Module):
             cell = self.fast_cell
         else:
             cell = self.cell
+        
         quant_outputs, quant_hidden_state, quant_cell_state = cell(
             quant_input.value,
             quant_hidden_state.value,
@@ -845,16 +867,17 @@ class QuantRecurrentStackBase(nn.Module):
         if shared_input_hidden_weights and not bidirectional:
             raise RuntimeError("Shared input-hidden weights requires bidirectional=True.")
         if return_quant_tensor and output_quant is None:
-            raise RuntimeError("return_quant_tensor=True requires io_quant != None.")
+            raise RuntimeError("return_quant_tensor=True requires output_quant != None.")
 
         self.num_directions = 2 if bidirectional else 1
         layers = []
-        # Add io_quant to kwargs. This allows easy overwriting during sharing
+        # Add input_quant and output_quant to kwargs. This allows easy overwriting during sharing
         kwargs['input_quant'] = input_quant
         kwargs['output_quant'] = output_quant
         for layer in range(num_layers):
             layer_input_size = input_size if layer == 0 else hidden_size * self.num_directions
-            quantize_output_only = bool(layer)
+            quantize_input_only = True
+            quantize_output_only = False
             # return_quant_tensor is required for bias quantization of internal layers
             layer_return_quant_tensor = return_quant_tensor or layer < num_layers - 1
             directions = []
@@ -862,6 +885,7 @@ class QuantRecurrentStackBase(nn.Module):
                 input_size=layer_input_size,
                 hidden_size=hidden_size,
                 reverse_input=False,
+                quantize_input_only=quantize_input_only,
                 quantize_output_only=quantize_output_only,
                 shared_input_hidden_weights=shared_input_hidden_weights,
                 dtype=dtype,
@@ -988,6 +1012,7 @@ class QuantLSTM(QuantRecurrentStackBase):
             gate_acc_quant=Int8ActPerTensorFloat,
             sigmoid_quant=Uint8ActPerTensorFloat,
             tanh_quant=Int8ActPerTensorFloat,
+            hidden_state_output_quant=Int8ActPerTensorFloat,
             cell_state_quant=Int8ActPerTensorFloat,
             coupled_input_forget_gates: bool = False,
             cat_output_cell_states=True,
@@ -1014,6 +1039,7 @@ class QuantLSTM(QuantRecurrentStackBase):
             gate_acc_quant=gate_acc_quant,
             sigmoid_quant=sigmoid_quant,
             tanh_quant=tanh_quant,
+            hidden_state_output_quant=hidden_state_output_quant,
             cell_state_quant=cell_state_quant,
             cifg=coupled_input_forget_gates,
             shared_input_hidden_weights=shared_input_hidden_weights,
@@ -1043,7 +1069,7 @@ class QuantLSTM(QuantRecurrentStackBase):
                 dir_outputs += [out]
                 dir_hidden_states += [out_hidden_state]
                 dir_cell_states += [out_cell_state]
-            if len(dir_outputs) > 1:  ## only entered for bi-directional LSTM
+            if len(dir_outputs) > 1: ## entered for bi-directional LSTM
                 out = torch.cat(dir_outputs, dim=-1)
                 output_hidden_states += [torch.cat(dir_hidden_states, dim=0)]
                 if self.cat_output_cell_states:

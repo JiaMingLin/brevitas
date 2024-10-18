@@ -193,19 +193,27 @@ class QuantRecurrentLayerMixin(ExportMixin):
     def __init__(
             self,
             cell: nn.Module,
-            io_quant: nn.Module,
+            # io_quant: nn.Module,
+            input_quant: nn.Module,
+            output_quant: nn.Module,
+            hidden_state_output_quant: nn.Module,
             input_size: int,
             hidden_size: int,
             reverse_input: bool,
             quantize_output_only: bool,
+            quantize_input_only: bool,
             shared_input_hidden_weights: bool,
             return_quant_tensor: bool):
         ExportMixin.__init__(self)
         self.cell = cell
-        self.io_quant = io_quant
+        # self.io_quant = io_quant
+        self.input_quant = input_quant
+        self.output_quant = output_quant
+        self.hidden_state_output_quant = hidden_state_output_quant
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.reverse_input = reverse_input
+        self.quantize_input_only = quantize_input_only
         self.quantize_output_only = quantize_output_only
         self.shared_input_hidden_weights = shared_input_hidden_weights
         self.return_quant_tensor = return_quant_tensor
@@ -266,10 +274,20 @@ class QuantRecurrentLayerMixin(ExportMixin):
             raise RuntimeError("PackedSequence input currently not supported.")
         quant_input = inp
         if not self.quantize_output_only:  # for the first layer this is True
-            quant_input = self.io_quant(quant_input)  # 
+            quant_input = self.input_quant(quant_input)  # 
         elif not isinstance(inp, QuantTensor):
             quant_input = QuantTensor(quant_input)
         return quant_input
+    
+    def maybe_quantize_output(self, output):
+        if isinstance(output, PackedSequence):
+            raise RuntimeError("PackedSequence input currently not supported.")
+        quant_output = output
+        if not self.quantize_input_only:
+            quant_output = self.output_quant(quant_output)
+        elif not isinstance(output, QuantTensor):
+            quant_output = QuantTensor(quant_output)
+        return quant_output
 
     def maybe_quantize_state(self, inp, state, quant):
         if state is None:
@@ -287,10 +305,10 @@ class QuantRecurrentLayerMixin(ExportMixin):
             if self.return_quant_tensor:
                 return QuantTensor(
                     quant_outputs,
-                    self.io_quant.scale(),
-                    self.io_quant.zero_point(),
-                    self.io_quant.bit_width(),
-                    self.io_quant.is_signed,
+                    self.output_quant.scale(),
+                    self.output_quant.zero_point(),
+                    self.output_quant.bit_width(),
+                    self.output_quant.is_signed,
                     self.training)
             else:
                 return quant_outputs
@@ -302,7 +320,7 @@ class QuantRecurrentLayerMixin(ExportMixin):
                     quant_output[1],
                     quant_output[2],
                     quant_output[3],
-                    self.io_quant.is_signed,
+                    self.output_quant.is_signed,
                     self.training) for quant_output in quant_outputs]
         else:
             outputs = [torch.unsqueeze(o[0], dim=seq_dim) for o in quant_outputs]
