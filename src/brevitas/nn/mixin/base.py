@@ -295,6 +295,7 @@ class QuantRecurrentLayerMixin(ExportMixin):
             quant_state = torch.zeros(
                 int(batch_size), self.hidden_size, dtype=inp.dtype, device=inp.device)
             quant_state = QuantTensor(quant_state)
+            # quant_state.shape = (batch_size, hidden_size)
         else:
             quant_state = quant(state)
         return quant_state

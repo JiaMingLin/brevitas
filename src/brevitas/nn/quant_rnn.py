@@ -244,6 +244,17 @@ class _QuantLSTMCell(nn.Module):
             quant_bias_cell: Tensor,
             quant_bias_output: Tensor):
         # Input gate
+        # print(f"quant_input: {set(quant_input.flatten().tolist())}")
+        # print(f"quant_weight_ii: {set(quant_weight_ii.flatten().tolist())}")
+        # print(f"quant_weight_hi: {set(quant_weight_hi.flatten().tolist())}")
+        # print(f"quant_weight_if: {set(quant_weight_if.flatten().tolist())}")
+        # print(f"quant_weight_hf: {set(quant_weight_hf.flatten().tolist())}")
+        # print(f"quant_weight_ic: {set(quant_weight_ic.flatten().tolist())}")
+        # print(f"quant_weight_hc: {set(quant_weight_hc.flatten().tolist())}")
+        # print(f"quant_weight_io: {set(quant_weight_io.flatten().tolist())}")
+        # print(f"quant_weight_ho: {set(quant_weight_ho.flatten().tolist())}")
+        # print(f"quant_hidden_state: {set(quant_hidden_state.flatten().tolist())}")
+        
         quant_ii_gate = F.linear(quant_input, quant_weight_ii)
         quant_hi_gate = F.linear(quant_hidden_state, quant_weight_hi)
         quant_input_gate = self.input_acc_quant(quant_ii_gate + quant_hi_gate + quant_bias_input)[0]
@@ -316,6 +327,7 @@ class _QuantLSTMCell(nn.Module):
         quant_cell_states = self.cell_states_init()
         for _ in range(end):
             quant_input = quant_inputs[index]
+            quant_hidden_state = self.hidden_state_output_quant(quant_hidden_state)[0]
             quant_hidden_state_tuple, quant_cell_state_tuple = self.forward_iter(
                 quant_input,
                 quant_hidden_state,
@@ -730,7 +742,6 @@ class _QuantLSTMLayer(QuantRecurrentLayerMixin, nn.Module):
 
         ## the raw input is quantized only at first layer
         quant_input = self.maybe_quantize_input(inp)
-
         ## quantized weight and bias for each gate, input, cell output and forget
         quant_weight_ii, quant_weight_hi, quant_bias_input = self.gate_params_fwd(
             self.input_gate_params, quant_input)
@@ -770,10 +781,12 @@ class _QuantLSTMLayer(QuantRecurrentLayerMixin, nn.Module):
         ## else, quantize the hidden state by the hidden quantizer
         quant_hidden_state = self.maybe_quantize_state(
             quant_input.value, hidden_state, self.cell.hidden_state_output_quant)
-        
+
         ##     quantize the memory cell state by the memory cell quantizer
         quant_cell_state = self.maybe_quantize_state(
             quant_input.value, cell_state, self.cell.cell_state_quant)
+        # print(type(self.cell.cell_state_quant))
+        # print(type(self.cell.hidden_state_output_quant))
         
         # Pick cell impl
         if self.export_mode:
