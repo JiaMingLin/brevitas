@@ -201,6 +201,7 @@ class QuantRecurrentLayerMixin(ExportMixin):
             batch_size = inp.size(0) if self.cell.batch_first else inp.size(1)
             quant_state = torch.zeros(
                 int(batch_size), self.hidden_size, dtype=inp.dtype, device=inp.device)
+            quant_state = quant(quant_state)
         else:
             quant_state = quant(state)
         return quant_state
